@@ -43,7 +43,7 @@ const POOL_TARGET = 8;
 export const useStore = create<State>((set, get) => {
   let pool: Case[] = [];
   const used = new Set<string>();
-  let inflight: Promise<void> | null = null;
+  let busy = false;
 
   // Bumped whenever the channel or mode changes so a slow in-flight refill cannot
   // dump cases of the old kind into the new session's pool.
@@ -72,7 +72,7 @@ export const useStore = create<State>((set, get) => {
     gen++;
     pool = [];
     used.clear();
-    inflight = null;
+    busy = false;
     set({ current: null, caseNo: 0, stats: emptyStats(), error: null });
   }
 
@@ -120,28 +120,24 @@ export const useStore = create<State>((set, get) => {
     },
 
     async next() {
-      if (inflight) return inflight;
+      if (busy) return;
+      busy = true;
       const mine = gen;
       set({ loading: true, error: null });
-      inflight = (async () => {
-        try {
-          if (!pool.length) await refill();
-          if (gen !== mine) return;
-          const c = pool.shift();
-          if (!c) throw new Error("this channel's logs are too sparse for cases, try another");
-          used.add(c.id);
-          set({ current: c, caseNo: get().caseNo + 1 });
-          if (pool.length < 3) void refill().catch(() => {});
-        } catch (e) {
-          if (gen === mine) set({ error: (e as Error).message });
-        } finally {
-          if (gen === mine) {
-            set({ loading: false });
-            inflight = null;
-          }
-        }
-      })();
-      return inflight;
+      try {
+        if (!pool.length) await refill();
+        if (gen !== mine) return;
+        const c = pool.shift();
+        if (!c) throw new Error("this channel's logs are too sparse for cases, try another");
+        used.add(c.id);
+        set({ current: c, caseNo: get().caseNo + 1 });
+        if (pool.length < 3) void refill().catch(() => {});
+      } catch (e) {
+        if (gen === mine) set({ error: (e as Error).message });
+      } finally {
+        busy = false;
+        if (gen === mine) set({ loading: false });
+      }
     },
 
     answer(correct) {
