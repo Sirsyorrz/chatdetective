@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Case, Forgery, LongRead } from "../cases";
 import { useStore } from "../state/store";
 import { Message } from "./Message";
@@ -8,17 +8,36 @@ const stamp = (d: Date) => d.toISOString().slice(0, 10);
 function Head({ n, c, label }: { n: number; c: Case; label: string }) {
   return (
     <div className="case-h">
-      <b>{label} {String(n).padStart(3, "0")}</b>
+      <b>
+        {label} {String(n).padStart(3, "0")}
+      </b>
       <span>#{c.channel}</span>
       <span>{stamp(c.date)}</span>
     </div>
   );
 }
 
-function Verdict({ ok, children }: { ok: boolean; children: React.ReactNode }) {
+function Footer({ ok, children }: { ok: boolean; children: React.ReactNode }) {
+  const next = useStore((s) => s.next);
+  const loading = useStore((s) => s.loading);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        void next();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [next]);
   return (
     <div className="verdict" data-ok={ok}>
-      <b>{ok ? "SOLVED" : "MISSED"}</b> &middot; {children}
+      <span>
+        <b>{ok ? "SOLVED" : "MISSED"}</b> &middot; {children}
+      </span>
+      <button className="next" disabled={loading} onClick={() => void next()}>
+        {loading ? "pulling logs..." : "next case"}
+      </button>
     </div>
   );
 }
@@ -52,7 +71,7 @@ function LongReadCase({ c, n }: { c: LongRead; n: number }) {
               disabled={done}
               onClick={() => {
                 setPicked(s.login);
-                answer(c, s.login, s.login === c.answer);
+                answer(s.login === c.answer);
               }}
             >
               <span className="idx">{i + 1}</span>
@@ -64,9 +83,9 @@ function LongReadCase({ c, n }: { c: LongRead; n: number }) {
         })}
       </div>
       {done && (
-        <Verdict ok={picked === c.answer}>
+        <Footer ok={picked === c.answer}>
           said by {c.message.name} at {new Date(c.message.at).toISOString().slice(11, 16)} UTC
-        </Verdict>
+        </Footer>
       )}
     </article>
   );
@@ -80,7 +99,7 @@ function ForgeryCase({ c, n }: { c: Forgery; n: number }) {
   return (
     <article className="case">
       <Head n={n} c={c} label="FILE" />
-      <div className="prompt" style={{ padding: "12px 12px 4px" }}>
+      <div className="prompt prompt-lead">
         Filed under{" "}
         <span className="suspect-name" style={{ color: c.suspect.color || undefined }}>
           {c.suspect.name}
@@ -104,7 +123,7 @@ function ForgeryCase({ c, n }: { c: Forgery; n: number }) {
               disabled={done}
               onClick={() => {
                 setPicked(m.id);
-                answer(c, m.id, m.id === c.forgedId);
+                answer(m.id === c.forgedId);
               }}
             >
               <span className="idx">{String(i + 1).padStart(2, "0")}</span>
@@ -115,7 +134,7 @@ function ForgeryCase({ c, n }: { c: Forgery; n: number }) {
           );
         })}
       </div>
-      {done && <Verdict ok={picked === c.forgedId}>the plant was {c.forgedBy.name}</Verdict>}
+      {done && <Footer ok={picked === c.forgedId}>the plant was {c.forgedBy.name}</Footer>}
     </article>
   );
 }

@@ -1,5 +1,10 @@
 # chatdetective
 
+Inspired by [whodunchat](https://whodunchat.ducksaint.com/) by DuckSaint. This is an
+independent rebuild of that idea the way I wanted to play it: endless modes only, no
+round limits, no timers, no lives, and a channel you type in rather than pick from a list.
+No code or assets from the original, and no affiliation with it.
+
 Endless "who said it" cases built from real Twitch chat logs. No backend: the browser
 talks straight to public [justlog](https://github.com/gempir/justlog) archives and the
 7TV/BTTV/FFZ emote CDNs, so it deploys as static files on GitHub Pages.
