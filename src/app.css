@@ -392,13 +392,16 @@ button:disabled {
 }
 
 .credit {
-  max-width: 520px;
-  color: var(--fg-faint);
-  font-size: var(--fs-sm);
-  line-height: 1.6;
+  max-width: 560px;
+  padding: var(--sp-4);
+  border-top: 1px solid var(--line-soft);
+  color: var(--fg-dim);
+  font-size: var(--fs-lg);
+  line-height: 1.7;
 }
 .credit a {
-  color: var(--fg-dim);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 @media (max-width: 640px) {
