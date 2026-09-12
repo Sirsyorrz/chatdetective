@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { CaseCard } from "./panels/CaseCard";
 import { Sidebar } from "./panels/Sidebar";
 import { allTimeBest, useStore } from "./state/store";
-import { INSTANCES } from "./justlog";
 
 function Feed() {
   const { cases, loading, error, channel } = useStore();
@@ -19,7 +18,7 @@ function Feed() {
     return () => io.disconnect();
   }, [channel, more, error]);
 
-  if (!channel) return <div className="empty">pick an archive channel to open the case files</div>;
+  if (!channel) return <div className="empty">type a twitch channel to open the case files</div>;
 
   return (
     <div className="feed">
@@ -41,7 +40,7 @@ function Feed() {
 }
 
 function TopBar() {
-  const { stats, mode, channel, instance } = useStore();
+  const { stats, mode, channel } = useStore();
   const acc = stats.solved ? Math.round((stats.correct / stats.solved) * 100) : 0;
   return (
     <div className="topbar">
@@ -64,17 +63,12 @@ function TopBar() {
       <span>
         best <b>{Math.max(stats.best, allTimeBest(mode))}</b>
       </span>
-      <span>{instance.label}</span>
+      <span>{channel?.instance.label ?? ""}</span>
     </div>
   );
 }
 
 export default function App() {
-  const setInstance = useStore((s) => s.setInstance);
-  useEffect(() => {
-    void setInstance(INSTANCES[0]!);
-  }, [setInstance]);
-
   return (
     <div className="app">
       <Sidebar />

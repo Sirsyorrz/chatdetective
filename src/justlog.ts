@@ -49,9 +49,30 @@ async function getJSON<T>(url: string, timeoutMs = 15000): Promise<T> {
   }
 }
 
-export async function listChannels(inst: Instance): Promise<Channel[]> {
-  const d = await getJSON<{ channels: { name: string; userID: string }[] }>(`${inst.url}/channels`);
-  return d.channels.map((c) => ({ ...c, instance: inst }));
+const indexCache = new Map<string, Promise<Map<string, string>>>();
+
+function channelIndex(inst: Instance): Promise<Map<string, string>> {
+  let p = indexCache.get(inst.id);
+  if (!p) {
+    p = getJSON<{ channels: { name: string; userID: string }[] }>(`${inst.url}/channels`)
+      .then((d) => new Map(d.channels.map((c) => [c.name.toLowerCase(), c.userID])))
+      .catch(() => new Map<string, string>());
+    indexCache.set(inst.id, p);
+  }
+  return p;
+}
+
+/** Every instance is asked at once; the first archive that logs the channel wins. */
+export async function findChannel(input: string): Promise<Channel[]> {
+  const name = input.trim().toLowerCase().replace(/^[@#]/, "").replace(/^.*twitch\.tv\//, "");
+  if (!name) return [];
+  const found = await Promise.all(
+    INSTANCES.map(async (instance) => {
+      const userID = (await channelIndex(instance)).get(name);
+      return userID ? { name, userID, instance } : null;
+    }),
+  );
+  return found.filter((c): c is Channel => c !== null);
 }
 
 function toMsg(m: RawMessage): Msg | null {

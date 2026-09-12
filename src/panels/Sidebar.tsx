@@ -1,5 +1,4 @@
-import { useMemo, useState } from "react";
-import { INSTANCES } from "../justlog";
+import { useState } from "react";
 import { useStore, type Mode } from "../state/store";
 
 const MODES: { id: Mode; name: string; sub: string }[] = [
@@ -8,17 +7,11 @@ const MODES: { id: Mode; name: string; sub: string }[] = [
 ];
 
 export function Sidebar() {
-  const { instance, channels, channelsLoading, channel, mode } = useStore();
-  const setInstance = useStore((s) => s.setInstance);
+  const { channel, alternates, recent, searching, searchError, mode } = useStore();
+  const search = useStore((s) => s.search);
   const setChannel = useStore((s) => s.setChannel);
   const setMode = useStore((s) => s.setMode);
   const [q, setQ] = useState("");
-
-  const shown = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    const list = needle ? channels.filter((c) => c.name.includes(needle)) : channels;
-    return list.slice(0, 400);
-  }, [channels, q]);
 
   return (
     <aside className="sidebar">
@@ -37,37 +30,70 @@ export function Sidebar() {
       </div>
 
       <div className="section-h">Archive</div>
-      <div className="pad stack">
-        <select
-          value={instance.id}
-          onChange={(e) => void setInstance(INSTANCES.find((i) => i.id === e.target.value)!)}
-        >
-          {INSTANCES.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.label}
-            </option>
-          ))}
-        </select>
-        <input
-          placeholder={channelsLoading ? "loading channels..." : `filter ${channels.length} channels`}
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-      </div>
+      <form
+        className="pad stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void search(q);
+        }}
+      >
+        <div className="row">
+          <input
+            placeholder="twitch channel"
+            value={q}
+            spellCheck={false}
+            autoCapitalize="off"
+            onChange={(e) => setQ(e.target.value)}
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <button disabled={searching || !q.trim()}>{searching ? "..." : "open"}</button>
+        </div>
+        {searchError && <div className="dim">{searchError}</div>}
+        {channel && (
+          <div className="dim">
+            #{channel.name} via {channel.instance.label}
+          </div>
+        )}
+      </form>
 
-      <div className="chan-list">
-        {shown.map((c) => (
-          <button
-            key={c.name}
-            className="chan"
-            data-on={channel?.name === c.name}
-            onClick={() => void setChannel(c)}
-          >
-            {c.name}
-          </button>
-        ))}
-        {!channelsLoading && !shown.length && <div className="pad dim">no channels</div>}
-      </div>
+      {alternates.length > 1 && (
+        <>
+          <div className="section-h">Also logged by</div>
+          <div className="pad stack">
+            {alternates.map((c) => (
+              <button
+                key={c.instance.id}
+                className="mode"
+                data-on={channel?.instance.id === c.instance.id}
+                onClick={() => void setChannel(c)}
+              >
+                {c.instance.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {recent.length > 0 && (
+        <>
+          <div className="section-h">Recent</div>
+          <div className="chan-list">
+            {recent.map((n) => (
+              <button
+                key={n}
+                className="chan"
+                data-on={channel?.name === n}
+                onClick={() => {
+                  setQ(n);
+                  void search(n);
+                }}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </aside>
   );
 }

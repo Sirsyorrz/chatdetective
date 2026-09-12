@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { buildCases, type Case } from "../cases";
 import { loadEmotes, type EmoteMap } from "../emotes";
-import { fetchWindow, INSTANCES, listChannels, type Channel, type Instance } from "../justlog";
+import { fetchWindow, findChannel, type Channel } from "../justlog";
 
 export type Mode = "longread" | "forgery";
 
@@ -19,11 +19,20 @@ function loadBest(): Record<string, number> {
   }
 }
 
+function loadRecent(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem("cd.recent") ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
 type State = {
-  instance: Instance;
-  channels: Channel[];
-  channelsLoading: boolean;
   channel: Channel | null;
+  alternates: Channel[];
+  recent: string[];
+  searching: boolean;
+  searchError: string | null;
   mode: Mode;
   emotes: EmoteMap;
   cases: Case[];
@@ -31,7 +40,7 @@ type State = {
   stats: Stats;
   loading: boolean;
   error: string | null;
-  setInstance: (i: Instance) => Promise<void>;
+  search: (name: string) => Promise<void>;
   setChannel: (c: Channel) => Promise<void>;
   setMode: (m: Mode) => void;
   more: () => Promise<void>;
@@ -61,10 +70,11 @@ export const useStore = create<State>((set, get) => {
   }
 
   return {
-    instance: INSTANCES[0]!,
-    channels: [],
-    channelsLoading: false,
     channel: null,
+    alternates: [],
+    recent: loadRecent(),
+    searching: false,
+    searchError: null,
     mode: "longread",
     emotes: new Map(),
     cases: [],
@@ -73,19 +83,23 @@ export const useStore = create<State>((set, get) => {
     loading: false,
     error: null,
 
-    async setInstance(instance) {
-      set({ instance, channels: [], channelsLoading: true, channel: null, error: null });
-      reset();
-      try {
-        const channels = (await listChannels(instance)).sort((a, b) => a.name.localeCompare(b.name));
-        set({ channels, channelsLoading: false });
-      } catch (e) {
-        set({ channelsLoading: false, error: `archive unreachable: ${(e as Error).message}` });
+    async search(name) {
+      const query = name.trim();
+      if (!query) return;
+      set({ searching: true, searchError: null });
+      const matches = await findChannel(query);
+      set({ searching: false, alternates: matches });
+      if (!matches.length) {
+        set({ searchError: `no public archive logs ${query.replace(/^[@#]/, "")}` });
+        return;
       }
+      await get().setChannel(matches[0]!);
     },
 
     async setChannel(channel) {
-      set({ channel, emotes: new Map() });
+      const recent = [channel.name, ...get().recent.filter((n) => n !== channel.name)].slice(0, 8);
+      localStorage.setItem("cd.recent", JSON.stringify(recent));
+      set({ channel, recent, emotes: new Map(), searchError: null });
       reset();
       loadEmotes(channel.userID).then((emotes) => set({ emotes }));
       await get().more();
