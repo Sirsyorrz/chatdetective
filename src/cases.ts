@@ -89,6 +89,8 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+const PEAK_PER_WINDOW = 5;
+
 const normalize = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 /** Copypasta repeats would otherwise fill a forgery file with the same statement. */
@@ -119,7 +121,10 @@ function buildPeak(w: Window, authors: Map<string, Msg[]>, used: Set<string>): C
   // A runaway spammer is a giveaway rather than a guess, so anyone dominating the
   // window is excluded from leading a lineup.
   const cap = Math.max(6, Math.floor(w.messages.length * 0.1));
-  for (const leader of ranked.filter((r) => r.count >= 4 && r.count <= cap)) {
+  // Only the busiest few of a window make interesting lineups; past that the counts
+  // collapse to single digits, so the feed moves to a fresh time frame instead.
+  const leaders = ranked.filter((r) => r.count >= 6 && r.count <= cap).slice(0, PEAK_PER_WINDOW);
+  for (const leader of leaders) {
     const quieter = ranked.filter(
       (r) => r.login !== leader.login && r.count >= 2 && r.count <= leader.count - 2,
     );
