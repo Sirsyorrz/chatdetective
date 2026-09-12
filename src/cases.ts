@@ -23,7 +23,20 @@ export type Forgery = {
   channel: string;
 };
 
-export type Case = LongRead | Forgery;
+export type PeakChatter = {
+  kind: "peak";
+  id: string;
+  lineup: { suspect: Suspect; count: number }[];
+  answer: string;
+  from: number;
+  to: number;
+  date: Date;
+  channel: string;
+};
+
+export type Case = LongRead | Forgery | PeakChatter;
+
+export type Mode = Case["kind"];
 
 function stripNativeEmotes(m: Msg): string {
   if (!m.emoteTag) return m.text;
@@ -93,6 +106,42 @@ function suspectOf(m: Msg): Suspect {
   return { login: m.login, name: m.name, color: m.color };
 }
 
+/** A guess is only fair if the winner is clearly ahead, so lineups are built from
+ *  a leader with a real margin over three strictly quieter chatters. */
+function buildPeak(w: Window, authors: Map<string, Msg[]>, used: Set<string>): Case[] {
+  const ranked = [...authors.entries()]
+    .map(([login, ms]) => ({ login, count: ms.length, msg: ms[0]! }))
+    .sort((a, b) => b.count - a.count);
+  const from = w.messages[0]!.at;
+  const to = w.messages[w.messages.length - 1]!.at;
+  const out: Case[] = [];
+
+  // A runaway spammer is a giveaway rather than a guess, so anyone dominating the
+  // window is excluded from leading a lineup.
+  const cap = Math.max(6, Math.floor(w.messages.length * 0.1));
+  for (const leader of ranked.filter((r) => r.count >= 4 && r.count <= cap)) {
+    const quieter = ranked.filter(
+      (r) => r.login !== leader.login && r.count >= 2 && r.count <= leader.count - 2,
+    );
+    if (quieter.length < 3) continue;
+    // Nearest counts first keeps the lineup close enough to be a real decision.
+    const decoys = shuffle(quieter.slice(0, 8)).slice(0, 3);
+    const id = `peak-${w.date.toISOString().slice(0, 10)}-${leader.login}-${decoys[0]!.login}`;
+    if (used.has(id)) continue;
+    out.push({
+      kind: "peak",
+      id,
+      lineup: shuffle([leader, ...decoys]).map((r) => ({ suspect: suspectOf(r.msg), count: r.count })),
+      answer: leader.login,
+      from,
+      to,
+      date: w.date,
+      channel: w.channel.name,
+    });
+  }
+  return out;
+}
+
 function byAuthor(messages: Msg[]) {
   const map = new Map<string, Msg[]>();
   for (const m of messages) {
@@ -105,9 +154,11 @@ function byAuthor(messages: Msg[]) {
 
 /** Cases are generated from one window and consumed lazily by the feed, so a
  *  window that yields nothing is discarded rather than retried per-case. */
-export function buildCases(w: Window, mode: "longread" | "forgery", used: Set<string>): Case[] {
+export function buildCases(w: Window, mode: Mode, used: Set<string>): Case[] {
   const authors = byAuthor(w.messages);
   const out: Case[] = [];
+
+  if (mode === "peak") return buildPeak(w, authors, used);
 
   if (mode === "longread") {
     const pool = distinct(w.messages.filter((m) => isSubstantial(m) && !used.has(m.id)));

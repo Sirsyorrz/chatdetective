@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import type { Case, Forgery, LongRead } from "../cases";
+import type { Case, Forgery, LongRead, PeakChatter } from "../cases";
 import { useStore } from "../state/store";
 import { Message } from "./Message";
 
 const stamp = (d: Date) => d.toISOString().slice(0, 10);
+const clock = (ms: number) => new Date(ms).toISOString().slice(11, 16);
 
 function Head({ n, c, label }: { n: number; c: Case; label: string }) {
   return (
@@ -139,6 +140,62 @@ function ForgeryCase({ c, n }: { c: Forgery; n: number }) {
   );
 }
 
+function PeakCase({ c, n }: { c: PeakChatter; n: number }) {
+  const answer = useStore((s) => s.answer);
+  const [picked, setPicked] = useState<string | null>(null);
+  const done = picked !== null;
+
+  return (
+    <article className="case">
+      <Head n={n} c={c} label="SHIFT" />
+      <div className="evidence peak-window">
+        <span className="peak-clock">
+          {clock(c.from)} &ndash; {clock(c.to)} UTC
+        </span>
+        <span className="peak-sub">four of them were in this stretch of chat</span>
+      </div>
+      <div className="prompt">Who typed the most?</div>
+      <div className="choices">
+        {c.lineup.map((e, i) => {
+          const state = !done
+            ? undefined
+            : e.suspect.login === c.answer
+              ? "right"
+              : e.suspect.login === picked
+                ? "wrong"
+                : "dim";
+          return (
+            <button
+              key={e.suspect.login}
+              className="choice"
+              data-state={state}
+              disabled={done}
+              onClick={() => {
+                setPicked(e.suspect.login);
+                answer(e.suspect.login === c.answer);
+              }}
+            >
+              <span className="idx">{i + 1}</span>
+              <span className="suspect-name" style={{ color: e.suspect.color || undefined }}>
+                {e.suspect.name}
+              </span>
+              {done && <span className="tally">{e.count}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {done && (
+        <Footer ok={picked === c.answer}>
+          {c.lineup.find((e) => e.suspect.login === c.answer)!.suspect.name} sent{" "}
+          {c.lineup.find((e) => e.suspect.login === c.answer)!.count} messages
+        </Footer>
+      )}
+    </article>
+  );
+}
+
 export function CaseCard({ c, n }: { c: Case; n: number }) {
-  return c.kind === "longread" ? <LongReadCase c={c} n={n} /> : <ForgeryCase c={c} n={n} />;
+  if (c.kind === "longread") return <LongReadCase c={c} n={n} />;
+  if (c.kind === "forgery") return <ForgeryCase c={c} n={n} />;
+  return <PeakCase c={c} n={n} />;
 }

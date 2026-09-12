@@ -5,7 +5,14 @@ import { allTimeBest, useStore, type Mode } from "./state/store";
 const MODES: { id: Mode; name: string; sub: string }[] = [
   { id: "longread", name: "Long Read", sub: "one message \u00b7 four suspects \u00b7 endless" },
   { id: "forgery", name: "The Forgery", sub: "four statements \u00b7 one planted \u00b7 endless" },
+  { id: "peak", name: "Peak Chatter", sub: "four suspects \u00b7 who typed the most \u00b7 endless" },
 ];
+
+const MODE_NAME: Record<Mode, string> = {
+  longread: "long read",
+  forgery: "forgery",
+  peak: "peak chatter",
+};
 
 function ChannelSearch() {
   const { recent, searching, searchError, channel } = useStore();
@@ -59,7 +66,7 @@ function Home() {
     <div className="home">
       <header className="title">
         <h1>chatdetective</h1>
-        <p>real chat logs. one message. who said it?</p>
+        <p>real chat logs. who said it?</p>
       </header>
       <ChannelSearch />
       <div className="mode-grid">
@@ -102,7 +109,7 @@ function Play() {
           &larr; archive
         </button>
         <span>
-          <b>{mode === "longread" ? "long read" : "forgery"}</b> #{channel?.name}
+          <b>{mode ? MODE_NAME[mode] : ""}</b> #{channel?.name}
         </span>
         <span className="spacer" />
         <span>

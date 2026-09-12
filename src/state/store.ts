@@ -1,9 +1,9 @@
 import { create } from "zustand";
-import { buildCases, type Case } from "../cases";
+import { buildCases, type Case, type Mode } from "../cases";
 import { loadEmotes, type EmoteMap } from "../emotes";
 import { fetchWindow, findChannel, type Channel } from "../justlog";
 
-export type Mode = "longread" | "forgery";
+export type { Mode };
 
 type Stats = { solved: number; correct: number; streak: number; best: number };
 
@@ -20,6 +20,7 @@ function loadJSON<T>(key: string, fallback: T): T {
 
 type State = {
   channel: Channel | null;
+  archives: Channel[];
   recent: string[];
   searching: boolean;
   searchError: string | null;
@@ -44,23 +45,40 @@ export const useStore = create<State>((set, get) => {
   const used = new Set<string>();
   let inflight: Promise<void> | null = null;
 
+  // Bumped whenever the channel or mode changes so a slow in-flight refill cannot
+  // dump cases of the old kind into the new session's pool.
+  let gen = 0;
+
   async function refill() {
-    const { channel, mode } = get();
-    if (!channel || !mode) return;
-    for (let i = 0; i < 6 && pool.length < POOL_TARGET; i++) {
-      const w = await fetchWindow(channel);
-      pool.push(...buildCases(w, mode, used));
+    const mine = gen;
+    const { archives, mode } = get();
+    if (!archives.length || !mode) return;
+    let lastError: unknown = null;
+    for (let i = 0; i < 8 && pool.length < POOL_TARGET; i++) {
+      // Archives differ in which days they cover, so rotate rather than trusting one.
+      const archive = archives[i % archives.length]!;
+      try {
+        const w = await fetchWindow(archive);
+        if (gen !== mine) return;
+        pool.push(...buildCases(w, mode, used));
+      } catch (e) {
+        lastError = e;
+      }
     }
+    if (!pool.length && lastError) throw lastError;
   }
 
   function reset() {
+    gen++;
     pool = [];
     used.clear();
+    inflight = null;
     set({ current: null, caseNo: 0, stats: emptyStats(), error: null });
   }
 
   return {
     channel: null,
+    archives: [],
     recent: loadJSON<string[]>("cd.recent", []),
     searching: false,
     searchError: null,
@@ -85,38 +103,42 @@ export const useStore = create<State>((set, get) => {
       }
       const recent = [channel.name, ...get().recent.filter((n) => n !== channel.name)].slice(0, 6);
       localStorage.setItem("cd.recent", JSON.stringify(recent));
-      set({ channel, recent, mode: null, emotes: new Map(), searchError: null });
       reset();
+      set({ channel, archives: matches, recent, mode: null, emotes: new Map(), searchError: null });
       loadEmotes(channel.userID).then((emotes) => set({ emotes }));
     },
 
     async start(mode) {
-      set({ mode });
       reset();
+      set({ mode });
       await get().next();
     },
 
     quit() {
-      set({ mode: null });
       reset();
+      set({ mode: null });
     },
 
     async next() {
       if (inflight) return inflight;
+      const mine = gen;
       set({ loading: true, error: null });
       inflight = (async () => {
         try {
           if (!pool.length) await refill();
+          if (gen !== mine) return;
           const c = pool.shift();
           if (!c) throw new Error("this channel's logs are too sparse for cases, try another");
           used.add(c.id);
           set({ current: c, caseNo: get().caseNo + 1 });
           if (pool.length < 3) void refill().catch(() => {});
         } catch (e) {
-          set({ error: (e as Error).message });
+          if (gen === mine) set({ error: (e as Error).message });
         } finally {
-          set({ loading: false });
-          inflight = null;
+          if (gen === mine) {
+            set({ loading: false });
+            inflight = null;
+          }
         }
       })();
       return inflight;

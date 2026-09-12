@@ -13,12 +13,14 @@ talks straight to public [justlog](https://github.com/gempir/justlog) archives a
 
 - **Long Read** - one substantial chat message, four chatters who were in the room, pick the author.
 - **The Forgery** - four statements filed under one suspect, three are genuine, mark the plant.
+- **Peak Chatter** - four chatters from the same stretch of chat, pick who typed the most.
 
-Both are endless. Cases stream into an infinite feed, no round limit, no timer, no lives.
+All three are endless: one case at a time, no round limit, no timer, no lives.
 
 ## Archives
 
-Pick any justlog instance and any channel it logs. Rounds are drawn from a random day
+Type a channel name and every known justlog instance is asked at once. Windows rotate
+across every archive that logs it, so a gap in one host is covered by another. Rounds are drawn from a random day
 in the last ~2 years, sampled at a random offset so the same window rarely repeats.
 
 ## Dev
